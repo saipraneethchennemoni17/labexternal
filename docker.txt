@@ -1,0 +1,262 @@
+1. Docker Single Containerization
+A. Basic Docker commands
+Command	One-line description	When to use
+docker --version	Displays installed Docker version.	Check Docker installation.
+docker pull redis	Downloads the Redis image from Docker Hub.	When you need an image locally.
+docker images	Lists all locally available images.	Check downloaded/built images.
+docker ps	Lists currently running containers.	Check active containers.
+docker ps -a	Lists all containers, including stopped ones.	Check stopped or exited containers.
+docker run --name my-redis -d redis	Creates and starts a Redis container in the background.	Create a container.
+docker stop my-redis	Stops a running container.	Stop an application.
+docker start my-redis	Starts an existing stopped container.	Restart a stopped container.
+docker restart my-redis	Stops and starts a container.	Restart a running container.
+docker rm my-redis	Deletes a stopped container.	Remove a container.
+docker rmi redis	Deletes a local image.	Remove an image.
+
+B. Accessing and managing containers
+Command	One-line description	When to use
+docker exec -it my-redis redis-cli	Opens the Redis CLI inside the container.	Access Redis.
+docker exec -it my-container bash	Opens a Bash shell inside a running container.	Debug or inspect a container.
+docker exec -it my-container sh	Opens a shell when Bash is unavailable.	Access lightweight containers.
+docker logs my-container	Displays container logs.	Debug application errors.
+docker port my-container	Displays the container's port mappings.	Check exposed ports.
+docker stats	Displays live CPU and memory usage of containers.	Monitor resource usage.
+
+Redis commands (execute inside redis-cli):
+Command	Description
+SET name "Alice"	Stores a key-value pair.
+GET name	Retrieves the value associated with a key.
+exit	Exits the Redis CLI.
+
+C. Dockerfile experiment
+Step 1 – Create a Dockerfile
+FROM redis:latest
+CMD ["redis-server"]
+
+
+Command	One-line description
+docker build -t redisnew .	Builds an image named redisnew using the Dockerfile in the current directory.
+docker run --name myredisnew -d redisnew	Creates and starts a container using the custom image.
+docker ps	Checks whether the container is running.
+docker stop myredisnew	Stops the container.
+docker login	Logs into Docker Hub.
+docker commit myredisnew username/redis1	Creates a new image from the container's current state.
+docker images	Lists available images.
+docker push username/redis1	Uploads the image to Docker Hub.
+docker rm myredisnew	Removes the container.
+docker rmi username/redis1	Removes the custom image locally.
+docker logout	Logs out of Docker Hub.
+docker pull username/redis1	Downloads the uploaded image from Docker Hub.
+docker run --name myredis -d username/redis1	Creates a container using the downloaded image.
+docker exec -it myredis redis-cli	Opens Redis CLI inside the new container.
+
+Replace username with your Docker Hub username.
+
+Important: docker commit saves the container's current filesystem state as an image. It is not a replacement for writing a Dockerfile.
+D. Additional scenario-based commands
+Command	One-line description
+docker run -d --name web_app -p 8080:5000 myapi	Runs a container in the background and maps host port 8080 to container port 5000.
+docker build -t myapi .	Builds an image named myapi.
+docker rmi old_api	Removes the image named old_api.
+docker tag myapi username/myapi:v1	Assigns a new repository name and tag to an image.
+docker save -o myapi.tar myapi	Exports an image into a TAR file for offline transfer.
+docker load -i myapi.tar	Imports an image from a TAR file.
+docker run -d --restart unless-stopped myapi	Runs a container with an automatic restart policy.
+docker run -d --memory="512m" myapi	Limits container memory to 512 MB.
+
+Useful Dockerfile instructions:
+Instruction	Purpose
+FROM	Specifies the base image.
+WORKDIR	Sets the working directory.
+COPY	Copies files into the image.
+RUN	Executes commands while building the image.
+CMD	Specifies the default command when the container starts.
+ENTRYPOINT	Specifies the main executable for the container.
+EXPOSE	Documents the port the application uses.
+
+Docker file, Single containerization.docx
+
+2. Docker Compose – Multi-Containerization
+A. Initial setup
+Step 1 – Check installation
+Command	Description
+docker --version	Checks Docker installation.
+docker compose version	Checks Docker Compose installation.
+
+Step 2 – Create project folder
+mkdir compose-lab
+cd compose-lab
+
+
+Command	Description
+mkdir compose-lab	Creates a new project directory.
+cd compose-lab	Navigates into the project directory.
+ls	Lists files and folders in the current directory.
+
+Step 3 – Create the configuration file
+
+Create a file named exactly:
+docker-compose.yml
+
+
+Remember: use a hyphen (-), not an underscore (_).
+B. Task 1 – Run Nginx and PostgreSQL
+Add this configuration:
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "8081:80"
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: demo_db
+
+
+We used 8081 because port 8080 was already occupied on your computer. The manual's original mapping is 8080:80.
+Command	Description
+docker compose up -d	Creates and starts all services defined in the YAML file in the background.
+docker compose ps	Lists the services and their container statuses.
+docker compose logs	Displays logs from all services.
+docker compose down	Stops and removes the containers and default network.
+
+Expected browser URL:
+http://localhost:8081
+
+
+C. Task 2 – Add Redis
+Add another service:
+redis:
+  image: redis:alpine
+
+
+Add this under the web service:
+depends_on:
+  - redis
+
+
+Commands:
+Command	Description
+docker compose up -d	Starts the updated Compose application.
+docker compose ps	Checks whether all three services are running.
+
+Expected services: web, db, redis.
+
+Note: depends_on controls startup order; it does not guarantee that Redis is ready to accept connections.
+D. Task 3 – Deploy on another machine
+Command / Action	Description
+Zip the compose-lab folder	Packages the project configuration for transfer.
+docker compose up -d	Starts the same services on another machine with Docker Compose installed.
+
+E. Task 4 – Networking and persistent storage
+Add these sections to your YAML file:
+networks:
+  app-net:
+
+volumes:
+  db-data:
+
+
+Add the network to your services and the volume to PostgreSQL:
+web:
+  networks:
+    - app-net
+  depends_on:
+    - db
+
+db:
+  volumes:
+    - db-data:/var/lib/postgresql/data
+  networks:
+    - app-net
+
+
+Commands:
+Command	Description
+docker compose up -d	Creates and starts services with the custom network and volume.
+docker compose down	Removes containers and the Compose network while preserving the named volume.
+docker compose up -d	Starts the services again using the existing persistent volume.
+
+Remember: docker compose down -v also deletes Compose-managed named volumes. Avoid it when you need to preserve database data.
+F. Task 5 – Flask application with Docker Compose
+Create app.py and a Dockerfile, then configure the web service with:
+web:
+  build: .
+  ports:
+    - "5000:5000"
+  depends_on:
+    - db
+
+
+Commands:
+Command	Description
+docker compose up --build	Builds the application image and starts the services.
+docker compose up --build	Rebuilds the image after application code changes and starts the updated services.
+docker compose ps	Checks service status.
+docker compose logs web	Displays logs from the web service.
+
+Expected browser URL:
+http://localhost:5000
+
+
+Docker Compose, Multi Containerization.docx
+
+3. Most important Docker Compose commands for scenarios
+These are the commands you should be able to select without hesitation.
+If the question says…	Use this command
+Start all containers/services	docker compose up -d
+Stop and remove all Compose containers	docker compose down
+Check all services	docker compose ps
+View logs of all services	docker compose logs
+View logs of one service	docker compose logs web
+Restart all services	docker compose restart
+Rebuild and start services	docker compose up --build
+Scale a service to 2 containers	docker compose up --scale web=2 -d
+Rebuild only the frontend service	docker compose up --build -d frontend
+Check running containers	docker ps
+Check all containers	docker ps -a
+Remove unused containers	docker container prune
+Remove unused images	docker image prune
+
+For the frontend-only scenario, replace frontend with the actual service name in your YAML file.
+
+4. Experiment execution order – Quick revision
+Experiment 1: Single Containerization
+1. docker pull redis – Download image.
+2. docker run --name my-redis -d redis – Create container.
+3. docker ps – Check running container.
+4. docker exec -it my-redis redis-cli – Access Redis.
+5. SET name "Alice" and GET name – Test Redis.
+6. docker stop my-redis – Stop container.
+7. docker start my-redis – Start container.
+8. docker rm my-redis – Remove container.
+9. docker rmi redis – Remove image.
+
+Dockerfile section
+1. Create Dockerfile.
+2. docker build -t redisnew . – Build image.
+3. docker run --name myredisnew -d redisnew – Run container.
+4. docker login – Login to Docker Hub.
+5. docker commit myredisnew username/redis1 – Create image from container.
+6. docker push username/redis1 – Upload image.
+7. docker pull username/redis1 – Download image.
+8. docker run --name myredis -d username/redis1 – Run downloaded image.
+9. Access Redis, test commands, and clean up.
+
+Experiment 2: Multi-Containerization
+1. mkdir compose-lab and cd compose-lab.
+2. Create docker-compose.yml.
+3. docker compose up -d – Start Nginx and PostgreSQL.
+4. docker compose ps – Verify services.
+5. Add Redis and depends_on.
+6. docker compose up -d – Start updated services.
+7. docker compose ps – Verify three services.
+8. Add custom network and persistent volume.
+9. docker compose down – Remove containers.
+10. docker compose up -d – Start again and verify persistence.
+11. Create Flask app and Dockerfile.
+12. docker compose up --build – Build and run Flask application.
+13. Modify Flask response and rebuild.
